@@ -1,0 +1,14 @@
+{
+  "name": "goQuant-Automation-Suite",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "HEADLESS=false playwright test",
+    "test:report": "playwright show-report",
+    "test:grep": "playwright test --grep",
+    "clean": "rm -rf test-results"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
