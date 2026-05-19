@@ -1,0 +1,76 @@
+name: Package version policy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  require-version-bump:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base commit for comparison
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags origin "${BASE_SHA}"
+
+      - name: Require package.json bump when merging to main
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${BASE_SHA}:package.json" 2>/dev/null; then
+            echo "Base ref has no package.json; skipping version comparison."
+            exit 0
+          fi
+          BASE_VERSION=$(git show "${BASE_SHA}:package.json" | jq -r .version)
+          HEAD_VERSION=$(jq -r .version package.json)
+          CHANGED=$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}" || true)
+          if [ -z "${CHANGED}" ]; then
+            echo "No file changes; nothing to verify."
+            exit 0
+          fi
+          if [ "${BASE_VERSION}" = "${HEAD_VERSION}" ]; then
+            echo "::error::Merging to main requires bumping \"version\" in package.json (still ${HEAD_VERSION}). Update the version and run npm install so package-lock.json stays in sync."
+            exit 1
+          fi
+          echo "Version bump OK: ${BASE_VERSION} -> ${HEAD_VERSION}"
+
+      - name: Require package-lock.json to match package.json
+        run: |
+          set -euo pipefail
+          PKG=$(jq -r .version package.json)
+          LOCK_TOP=$(jq -r .version package-lock.json)
+          LOCK_ROOT=$(jq -r '.packages[""].version' package-lock.json)
+          if [ "${PKG}" != "${LOCK_TOP}" ] || [ "${PKG}" != "${LOCK_ROOT}" ]; then
+            echo "::error::package-lock.json version must match package.json (${PKG}). Run npm install after changing the version."
+            exit 1
+          fi
+          echo "package.json and package-lock.json versions match (${PKG})."
+
+  verify-lock-sync-on-main:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify package.json matches package-lock.json on main
+        run: |
+          set -euo pipefail
+          PKG=$(jq -r .version package.json)
+          LOCK_TOP=$(jq -r .version package-lock.json)
+          LOCK_ROOT=$(jq -r '.packages[""].version' package-lock.json)
+          if [ "${PKG}" != "${LOCK_TOP}" ] || [ "${PKG}" != "${LOCK_ROOT}" ]; then
+            echo "::error::package-lock.json version must match package.json (${PKG}). Run npm install after changing the version."
+            exit 1
+          fi
+          echo "Versions in sync on main (${PKG})."

@@ -25,6 +25,10 @@ goQuant-Automation-Suite/
 └── package.json
 ```
 
+## Releases and `main` branch
+
+Any pull request that targets `main` must **bump `"version"` in `package.json`** whenever the branch changes files compared to `main`, then run **`npm install`** so the root `version` fields in `package-lock.json` stay aligned. CI enforces this in `.github/workflows/package-version-policy.yml`.
+
 ## Prerequisites
 
 - Node.js 18+
